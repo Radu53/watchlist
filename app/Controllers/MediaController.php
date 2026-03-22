@@ -24,13 +24,17 @@ class MediaController
         $coverUrl = trim($_POST['cover_url'] ?? '');
         $imdbRating = trim($_POST['imdb_rating'] ?? '');
         $watchUrl = trim($_POST['watch_url'] ?? '');
+        $genreNames = $_POST['genres'] ?? [];
+        if (!is_array($genreNames)) {
+            $genreNames = [];
+        }
 
         if ($title === '') {
             http_response_code(422);
             exit('Title is required.');
         }
 
-        $status = $watchUrl !== '' ? '' : 'draft';
+        $status = $watchUrl !== '' ? null : 'draft';
         $watchDomain = $this->extractDomain($watchUrl);
 
         $stmt = $pdo->prepare("
@@ -54,6 +58,9 @@ class MediaController
             'watch_domain' => $watchDomain,
             'status' => $status,
         ]);
+
+        $mediaId = (int)$pdo->lastInsertId();
+        $this->syncGenres($pdo, $mediaId, $genreNames);
 
         header('Location: ' . url('/'));
         exit;
@@ -96,6 +103,8 @@ class MediaController
             exit('Item not found.');
         }
 
+        $item['genre_names'] = $this->getGenreNamesForMedia($pdo, $id);
+
         View::render('media/edit', [
             'item' => $item,
         ]);
@@ -113,6 +122,10 @@ class MediaController
         $coverUrl = trim($_POST['cover_url'] ?? '');
         $imdbRating = trim($_POST['imdb_rating'] ?? '');
         $watchUrl = trim($_POST['watch_url'] ?? '');
+        $genreNames = $_POST['genres'] ?? [];
+        if (!is_array($genreNames)) {
+            $genreNames = [];
+        }
 
         if ($id <= 0) {
             http_response_code(400);
@@ -135,12 +148,12 @@ class MediaController
 
         $watchDomain = $this->extractDomain($watchUrl);
 
-        $status = $existing['status'] ?? 'draft';
+        $status = $existing['status'];
 
         if ($watchUrl === '') {
             $status = 'draft';
         } elseif ($status === 'draft') {
-            $status = '';
+            $status = null;
         }
 
         $stmt = $pdo->prepare("
@@ -170,6 +183,8 @@ class MediaController
             'watch_domain' => $watchDomain,
             'status' => $status,
         ]);
+
+        $this->syncGenres($pdo, $id, $genreNames);
 
         header('Location: ' . url('/'));
         exit;
@@ -201,7 +216,7 @@ class MediaController
             exit('Cannot change status without a watch URL.');
         }
 
-        $oldStatus = $item['status'] ?? '';
+        $oldStatus = $item['status'] ?? null;
         $type = $item['type'];
 
         if (!$this->isValidStatusTransition($type, $oldStatus, $newStatus)) {
@@ -222,7 +237,7 @@ class MediaController
 
         $stmt->execute([
             'media_id' => $id,
-            'old_status' => $oldStatus !== '' ? $oldStatus : null,
+            'old_status' => $oldStatus,
             'new_status' => $newStatus,
             'action_date' => date('Y-m-d'),
         ]);
@@ -252,7 +267,7 @@ class MediaController
             $this->json(['ok' => false, 'message' => 'Missing watch URL.'], 422);
         }
 
-        $oldStatus = $item['status'] ?? '';
+        $oldStatus = $item['status'] ?? null;
         $newStatus = $oldStatus;
 
         if ($item['type'] === 'movie') {
@@ -260,7 +275,7 @@ class MediaController
                 $newStatus = 'watched';
             }
         } elseif ($item['type'] === 'tv') {
-            if ($oldStatus === '') {
+            if ($oldStatus === null || $oldStatus === '') {
                 $newStatus = 'started';
             }
         }
@@ -279,7 +294,7 @@ class MediaController
 
             $stmt->execute([
                 'media_id' => $id,
-                'old_status' => $oldStatus !== '' ? $oldStatus : null,
+                'old_status' => $oldStatus,
                 'new_status' => $newStatus,
                 'action_date' => date('Y-m-d'),
             ]);
@@ -327,21 +342,103 @@ class MediaController
         return preg_replace('/^www\./i', '', strtolower($host));
     }
 
-    private function isValidStatusTransition(string $type, string $oldStatus, string $newStatus): bool
+    private function isValidStatusTransition(string $type, ?string $oldStatus, string $newStatus): bool
     {
         if ($newStatus !== 'watched') {
             return false;
         }
 
         if ($type === 'movie') {
-            return $oldStatus === '' || $oldStatus === 'watched';
+            return in_array($oldStatus, [null, '', 'watched'], true);
         }
 
         if ($type === 'tv') {
-            return in_array($oldStatus, ['', 'started', 'watched'], true);
+            return in_array($oldStatus, [null, '', 'started', 'watched'], true);
         }
 
         return false;
+    }
+
+    private function syncGenres(PDO $pdo, int $mediaId, array $genreNames): void
+    {
+        $genreNames = $this->normalizeGenreArray($genreNames);
+
+        $stmt = $pdo->prepare("DELETE FROM media_genres WHERE media_id = :media_id");
+        $stmt->execute(['media_id' => $mediaId]);
+
+        if (empty($genreNames)) {
+            return;
+        }
+
+        foreach ($genreNames as $genreName) {
+            $genreId = $this->findOrCreateGenre($pdo, $genreName);
+
+            $stmt = $pdo->prepare("
+                INSERT IGNORE INTO media_genres (media_id, genre_id)
+                VALUES (:media_id, :genre_id)
+            ");
+
+            $stmt->execute([
+                'media_id' => $mediaId,
+                'genre_id' => $genreId,
+            ]);
+        }
+    }
+
+    private function normalizeGenreArray(array $genreNames): array
+    {
+        $genres = [];
+
+        foreach ($genreNames as $name) {
+            if (!is_string($name)) {
+                continue;
+            }
+
+            $name = trim($name);
+            if ($name === '') {
+                continue;
+            }
+
+            $name = preg_replace('/\s+/', ' ', $name);
+            $name = mb_convert_case($name, MB_CASE_TITLE, 'UTF-8');
+            $genres[] = $name;
+        }
+
+        return array_values(array_unique($genres));
+    }
+
+    private function findOrCreateGenre(PDO $pdo, string $genreName): int
+    {
+        $stmt = $pdo->prepare("SELECT id FROM genres WHERE name = :name LIMIT 1");
+        $stmt->execute(['name' => $genreName]);
+        $genre = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($genre) {
+            return (int)$genre['id'];
+        }
+
+        $stmt = $pdo->prepare("INSERT INTO genres (name) VALUES (:name)");
+        $stmt->execute(['name' => $genreName]);
+
+        return (int)$pdo->lastInsertId();
+    }
+
+    private function getGenreNamesForMedia(PDO $pdo, int $mediaId): array
+    {
+        $stmt = $pdo->prepare("
+            SELECT g.name
+            FROM genres g
+            INNER JOIN media_genres mg ON mg.genre_id = g.id
+            WHERE mg.media_id = :media_id
+            ORDER BY g.name ASC
+        ");
+
+        $stmt->execute(['media_id' => $mediaId]);
+
+        return array_map(
+            static fn(array $row) => $row['name'],
+            $stmt->fetchAll(PDO::FETCH_ASSOC)
+        );
     }
 
     private function json(array $data, int $statusCode = 200): void
@@ -350,5 +447,39 @@ class MediaController
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($data);
         exit;
+    }
+    
+    public function searchGenres(): void
+    {
+        $pdo = Database::connection();
+
+        $query = trim($_GET['q'] ?? '');
+
+        if ($query === '') {
+            $stmt = $pdo->query("
+                SELECT name
+                FROM genres
+                ORDER BY name ASC
+                LIMIT 10
+            ");
+        } else {
+            $stmt = $pdo->prepare("
+                SELECT name
+                FROM genres
+                WHERE name LIKE :query
+                ORDER BY name ASC
+                LIMIT 10
+            ");
+            $stmt->execute([
+                'query' => '%' . $query . '%',
+            ]);
+        }
+
+        $genres = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $this->json([
+            'ok' => true,
+            'genres' => $genres,
+        ]);
     }
 }

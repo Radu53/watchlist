@@ -22,3 +22,21 @@ function url(string $path = ''): string
     $path = '/' . ltrim($path, '/');
     return base_url() . ($path === '/' ? '/' : $path);
 }
+
+function is_logged_in(): bool
+{
+    return !empty($_SESSION['user_id']);
+}
+
+function current_username(): ?string
+{
+    return $_SESSION['username'] ?? null;
+}
+
+function require_login(): void
+{
+    if (!is_logged_in()) {
+        header('Location: ' . url('/login'));
+        exit;
+    }
+}

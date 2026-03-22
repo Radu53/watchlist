@@ -18,6 +18,15 @@
         <option value="watched" <?= $filters['status'] === 'watched' ? 'selected' : '' ?>>Watched</option>
     </select>
 
+    <select name="genre">
+        <option value="">All genres</option>
+        <?php foreach ($allGenres as $genreName): ?>
+            <option value="<?= htmlspecialchars($genreName) ?>" <?= $filters['genre'] === $genreName ? 'selected' : '' ?>>
+                <?= htmlspecialchars($genreName) ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+
     <button type="submit">Filter</button>
 </form>
 
@@ -33,6 +42,7 @@
                 $coverUrl = trim((string)($item['cover_url'] ?? ''));
                 $title = $item['title'] ?? '';
                 $year = $item['year'] ?? null;
+                $genres = $item['genres'] ?? [];
             ?>
             <article class="poster-card" data-id="<?= (int)$item['id'] ?>" data-watch-url="<?= htmlspecialchars($watchUrl) ?>">
                 <?php if ($coverUrl !== ''): ?>
@@ -75,6 +85,12 @@
                             <span>(<?= (int)$year ?>)</span>
                         <?php endif; ?>
                     </h2>
+
+                    <?php if (!empty($genres)): ?>
+                        <div class="poster-genres">
+                            <?= htmlspecialchars(implode(', ', $genres)) ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </article>
         <?php endforeach; ?>

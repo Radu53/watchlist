@@ -40,6 +40,15 @@ class Router
 
         $path = '/' . ltrim($path, '/');
 
+        $publicPaths = [
+            '/login',
+        ];
+
+        if (!in_array($path, $publicPaths, true) && !\is_logged_in()) {
+            header('Location: ' . \url('/login'));
+            exit;
+        }
+
         $handler = $this->routes[$method][$path] ?? null;
 
         if (!$handler) {

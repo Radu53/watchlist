@@ -1,7 +1,14 @@
 CREATE DATABASE IF NOT EXISTS cphgderk_watchlist CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE cphgderk_watchlist;
 
-CREATE TABLE media (
+CREATE TABLE IF NOT EXISTS users (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS media (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     type ENUM('unknown', 'movie', 'tv') NOT NULL DEFAULT 'unknown',
     title VARCHAR(255) NOT NULL,
@@ -15,7 +22,8 @@ CREATE TABLE media (
     episode_count SMALLINT UNSIGNED NULL,
     first_air_date DATE NULL,
     last_air_date DATE NULL,
-    status ENUM('draft', 'started', 'watched') NOT NULL DEFAULT 'draft',
+    status ENUM('draft', 'started', 'watched') NULL DEFAULT NULL,
+    needs_review TINYINT(1) NOT NULL DEFAULT 0 AFTER status,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_title (title),
@@ -25,12 +33,12 @@ CREATE TABLE media (
     INDEX idx_watch_domain (watch_domain)
 );
 
-CREATE TABLE genres (
+CREATE TABLE IF NOT EXISTS genres (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE
 );
 
-CREATE TABLE media_genres (
+CREATE TABLE IF NOT EXISTS media_genres (
     media_id INT UNSIGNED NOT NULL,
     genre_id INT UNSIGNED NOT NULL,
     PRIMARY KEY (media_id, genre_id),
@@ -40,7 +48,7 @@ CREATE TABLE media_genres (
         FOREIGN KEY (genre_id) REFERENCES genres(id) ON DELETE CASCADE
 );
 
-CREATE TABLE watch_history (
+CREATE TABLE IF NOT EXISTS watch_history (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     media_id INT UNSIGNED NOT NULL,
     old_status VARCHAR(50) NULL,
@@ -53,7 +61,7 @@ CREATE TABLE watch_history (
     INDEX idx_action_date (action_date)
 );
 
-CREATE TABLE parser_sites (
+CREATE TABLE IF NOT EXISTS parser_sites (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     domain VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(255) NULL,
@@ -62,7 +70,7 @@ CREATE TABLE parser_sites (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE parser_rules (
+CREATE TABLE IF NOT EXISTS parser_rules (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     site_id INT UNSIGNED NOT NULL,
     field_name VARCHAR(100) NOT NULL,
