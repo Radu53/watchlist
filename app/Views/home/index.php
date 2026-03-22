@@ -13,10 +13,9 @@
 
     <select name="status">
         <option value="">All statuses</option>
-        <option value="pending" <?= $filters['status'] === 'pending' ? 'selected' : '' ?>>Pending</option>
+        <option value="none" <?= $filters['status'] === 'none' ? 'selected' : '' ?>>Not watched</option>
         <option value="started" <?= $filters['status'] === 'started' ? 'selected' : '' ?>>Started</option>
         <option value="watched" <?= $filters['status'] === 'watched' ? 'selected' : '' ?>>Watched</option>
-        <option value="finished" <?= $filters['status'] === 'finished' ? 'selected' : '' ?>>Finished</option>
     </select>
 
     <button type="submit">Filter</button>
@@ -25,67 +24,102 @@
 <?php if (empty($items)): ?>
     <p>No items found.</p>
 <?php else: ?>
-    <div class="grid">
+    <div class="poster-grid">
         <?php foreach ($items as $item): ?>
-            <article class="card">
-                <?php if (!empty($item['cover_url'])): ?>
-                    <img src="<?= htmlspecialchars($item['cover_url']) ?>" alt="<?= htmlspecialchars($item['title']) ?>" class="cover">
+            <?php
+                $status = $item['status'] ?? '';
+                $type = $item['type'] ?? 'unknown';
+                $watchUrl = $item['watch_url'] ?? '';
+                $coverUrl = trim((string)($item['cover_url'] ?? ''));
+                $title = $item['title'] ?? '';
+                $year = $item['year'] ?? null;
+            ?>
+            <article class="poster-card" data-id="<?= (int)$item['id'] ?>" data-watch-url="<?= htmlspecialchars($watchUrl) ?>">
+                <?php if ($coverUrl !== ''): ?>
+                    <img src="<?= htmlspecialchars($coverUrl) ?>" alt="<?= htmlspecialchars($title) ?>" class="poster-image">
+                <?php else: ?>
+                    <div class="poster-fallback">No Cover</div>
                 <?php endif; ?>
 
-                <h2><?= htmlspecialchars($item['title']) ?></h2>
+                <?php if ($status === 'started'): ?>
+                    <div class="poster-status started">Started</div>
+                <?php elseif ($status === 'watched'): ?>
+                    <div class="poster-status watched">Watched</div>
+                <?php endif; ?>
 
-                <div class="meta">
-                    <span><?= htmlspecialchars(strtoupper($item['type'])) ?></span>
-                    <?php if (!empty($item['year'])): ?>
-                        <span><?= (int)$item['year'] ?></span>
-                    <?php endif; ?>
-                    <span class="badge"><?= htmlspecialchars($item['status']) ?></span>
+                <form method="post" action="<?= htmlspecialchars(url('/media/status')) ?>" class="corner-watch-form">
+                    <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
+                    <input type="hidden" name="status" value="watched">
+                    <button type="submit" class="corner-watch-btn" title="Mark as watched">✓</button>
+                </form>
+
+                <div class="poster-overlay">
+                    <div class="poster-actions">
+                        <button
+                            type="button"
+                            class="btn watch-action-btn"
+                            data-id="<?= (int)$item['id'] ?>"
+                            data-type="<?= htmlspecialchars($type) ?>"
+                        >
+                            Watch
+                        </button>
+
+                        <a class="btn" href="<?= htmlspecialchars(url('/media/edit?id=' . $item['id'])) ?>">Edit</a>
+                    </div>
                 </div>
 
-                <?php if (!empty($item['description'])): ?>
-                    <p><?= nl2br(htmlspecialchars($item['description'])) ?></p>
-                <?php endif; ?>
-
-                <?php if (!empty($item['watch_url'])): ?>
-                    <p><a href="<?= htmlspecialchars($item['watch_url']) ?>" target="_blank" rel="noopener noreferrer">Open watch link</a></p>
-                <?php endif; ?>
-
-                <div class="actions">
-                    <a class="btn" href="<?= htmlspecialchars(url('/media/edit?id=' . $item['id'])) ?>">Edit</a>
-
-                    <?php if ($item['type'] === 'movie' && $item['status'] === 'pending'): ?>
-                        <form method="post" action="<?= htmlspecialchars(url('/media/status')) ?>">
-                            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
-                            <input type="hidden" name="status" value="watched">
-                            <button type="submit">Mark Watched</button>
-                        </form>
-                    <?php endif; ?>
-
-                    <?php if ($item['type'] === 'tv' && $item['status'] === 'pending'): ?>
-                        <form method="post" action="<?= htmlspecialchars(url('/media/status')) ?>">
-                            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
-                            <input type="hidden" name="status" value="started">
-                            <button type="submit">Start</button>
-                        </form>
-                    <?php endif; ?>
-
-                    <?php if ($item['type'] === 'tv' && $item['status'] === 'started'): ?>
-                        <form method="post" action="<?= htmlspecialchars(url('/media/status')) ?>">
-                            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
-                            <input type="hidden" name="status" value="finished">
-                            <button type="submit">Finish</button>
-                        </form>
-                    <?php endif; ?>
-
-                    <?php if ($item['type'] === 'tv' && $item['status'] === 'finished'): ?>
-                        <form method="post" action="<?= htmlspecialchars(url('/media/status')) ?>">
-                            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
-                            <input type="hidden" name="status" value="started">
-                            <button type="submit">Restart</button>
-                        </form>
-                    <?php endif; ?>
+                <div class="poster-title-wrap">
+                    <h2 class="poster-title">
+                        <?= htmlspecialchars($title) ?>
+                        <?php if (!empty($year)): ?>
+                            <span>(<?= (int)$year ?>)</span>
+                        <?php endif; ?>
+                    </h2>
                 </div>
             </article>
         <?php endforeach; ?>
     </div>
 <?php endif; ?>
+
+<script>
+document.addEventListener('click', async function (event) {
+    const btn = event.target.closest('.watch-action-btn');
+    if (!btn) return;
+
+    event.preventDefault();
+
+    const id = btn.dataset.id;
+    const card = btn.closest('.poster-card');
+    if (!id || !card) return;
+
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('<?= htmlspecialchars(url('/media/watch')) ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            },
+            body: new URLSearchParams({ id })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+            alert(data.message || 'Watch action failed.');
+            btn.disabled = false;
+            return;
+        }
+
+        if (data.watch_url) {
+            window.open(data.watch_url, '_blank', 'noopener');
+        }
+
+        window.location.reload();
+    } catch (error) {
+        console.error(error);
+        alert('Watch action failed.');
+        btn.disabled = false;
+    }
+});
+</script>

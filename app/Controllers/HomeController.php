@@ -16,7 +16,7 @@ class HomeController
         $type = trim($_GET['type'] ?? '');
         $status = trim($_GET['status'] ?? '');
 
-        $sql = "SELECT * FROM media WHERE status != 'draft'";
+        $sql = "SELECT * FROM media WHERE watch_url IS NOT NULL AND watch_url != ''";
         $params = [];
 
         if ($search !== '') {
@@ -35,8 +35,12 @@ class HomeController
         }
 
         if ($status !== '') {
-            $sql .= " AND status = :status";
-            $params['status'] = $status;
+            if ($status === 'none') {
+                $sql .= " AND (status IS NULL OR status = '')";
+            } else {
+                $sql .= " AND status = :status";
+                $params['status'] = $status;
+            }
         }
 
         $sql .= " ORDER BY created_at DESC";

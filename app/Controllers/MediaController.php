@@ -30,11 +30,7 @@ class MediaController
             exit('Title is required.');
         }
 
-        $status = 'draft';
-        if ($type !== 'unknown' || $year !== '' || $description !== '' || $coverUrl !== '' || $watchUrl !== '') {
-            $status = 'pending';
-        }
-
+        $status = $watchUrl !== '' ? '' : 'draft';
         $watchDomain = $this->extractDomain($watchUrl);
 
         $stmt = $pdo->prepare("
@@ -70,7 +66,7 @@ class MediaController
         $stmt = $pdo->query("
             SELECT *
             FROM media
-            WHERE status = 'draft'
+            WHERE watch_url IS NULL OR watch_url = ''
             ORDER BY created_at DESC
         ");
 
@@ -137,14 +133,15 @@ class MediaController
             exit('Item not found.');
         }
 
-        $status = $existing['status'];
-        if ($status === 'draft') {
-            if ($type !== 'unknown' || $year !== '' || $description !== '' || $coverUrl !== '' || $watchUrl !== '') {
-                $status = 'pending';
-            }
-        }
-
         $watchDomain = $this->extractDomain($watchUrl);
+
+        $status = $existing['status'] ?? 'draft';
+
+        if ($watchUrl === '') {
+            $status = 'draft';
+        } elseif ($status === 'draft') {
+            $status = '';
+        }
 
         $stmt = $pdo->prepare("
             UPDATE media
@@ -190,7 +187,7 @@ class MediaController
             exit('Invalid request.');
         }
 
-        $stmt = $pdo->prepare("SELECT id, type, title, status FROM media WHERE id = :id");
+        $stmt = $pdo->prepare("SELECT id, type, title, status, watch_url FROM media WHERE id = :id");
         $stmt->execute(['id' => $id]);
         $item = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -199,7 +196,12 @@ class MediaController
             exit('Item not found.');
         }
 
-        $oldStatus = $item['status'];
+        if (empty($item['watch_url'])) {
+            http_response_code(422);
+            exit('Cannot change status without a watch URL.');
+        }
+
+        $oldStatus = $item['status'] ?? '';
         $type = $item['type'];
 
         if (!$this->isValidStatusTransition($type, $oldStatus, $newStatus)) {
@@ -220,13 +222,74 @@ class MediaController
 
         $stmt->execute([
             'media_id' => $id,
-            'old_status' => $oldStatus,
+            'old_status' => $oldStatus !== '' ? $oldStatus : null,
             'new_status' => $newStatus,
             'action_date' => date('Y-m-d'),
         ]);
 
         header('Location: ' . url('/'));
         exit;
+    }
+
+    public function watch(): void
+    {
+        $pdo = Database::connection();
+
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            $this->json(['ok' => false, 'message' => 'Invalid id.'], 400);
+        }
+
+        $stmt = $pdo->prepare("SELECT id, type, status, watch_url FROM media WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $item = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$item) {
+            $this->json(['ok' => false, 'message' => 'Item not found.'], 404);
+        }
+
+        if (empty($item['watch_url'])) {
+            $this->json(['ok' => false, 'message' => 'Missing watch URL.'], 422);
+        }
+
+        $oldStatus = $item['status'] ?? '';
+        $newStatus = $oldStatus;
+
+        if ($item['type'] === 'movie') {
+            if ($oldStatus !== 'watched') {
+                $newStatus = 'watched';
+            }
+        } elseif ($item['type'] === 'tv') {
+            if ($oldStatus === '') {
+                $newStatus = 'started';
+            }
+        }
+
+        if ($newStatus !== $oldStatus) {
+            $stmt = $pdo->prepare("UPDATE media SET status = :status WHERE id = :id");
+            $stmt->execute([
+                'status' => $newStatus,
+                'id' => $id,
+            ]);
+
+            $stmt = $pdo->prepare("
+                INSERT INTO watch_history (media_id, old_status, new_status, action_date)
+                VALUES (:media_id, :old_status, :new_status, :action_date)
+            ");
+
+            $stmt->execute([
+                'media_id' => $id,
+                'old_status' => $oldStatus !== '' ? $oldStatus : null,
+                'new_status' => $newStatus,
+                'action_date' => date('Y-m-d'),
+            ]);
+        }
+
+        $this->json([
+            'ok' => true,
+            'watch_url' => $item['watch_url'],
+            'status' => $newStatus,
+        ]);
     }
 
     public function history(): void
@@ -266,20 +329,26 @@ class MediaController
 
     private function isValidStatusTransition(string $type, string $oldStatus, string $newStatus): bool
     {
+        if ($newStatus !== 'watched') {
+            return false;
+        }
+
         if ($type === 'movie') {
-            return $oldStatus === 'pending' && $newStatus === 'watched';
+            return $oldStatus === '' || $oldStatus === 'watched';
         }
 
         if ($type === 'tv') {
-            $allowed = [
-                'pending' => ['started'],
-                'started' => ['finished'],
-                'finished' => ['started'],
-            ];
-
-            return in_array($newStatus, $allowed[$oldStatus] ?? [], true);
+            return in_array($oldStatus, ['', 'started', 'watched'], true);
         }
 
         return false;
+    }
+
+    private function json(array $data, int $statusCode = 200): void
+    {
+        http_response_code($statusCode);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($data);
+        exit;
     }
 }

@@ -21,10 +21,10 @@ $router->get('/', [HomeController::class, 'index']);
 $router->get('/media/create', [MediaController::class, 'create']);
 $router->post('/media/store', [MediaController::class, 'store']);
 $router->get('/media/todo', [MediaController::class, 'todo']);
-
 $router->get('/media/edit', [MediaController::class, 'edit']);
 $router->post('/media/update', [MediaController::class, 'update']);
 $router->post('/media/status', [MediaController::class, 'changeStatus']);
+$router->post('/media/watch', [MediaController::class, 'watch']);
 $router->get('/history', [MediaController::class, 'history']);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);

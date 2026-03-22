@@ -15,7 +15,7 @@ CREATE TABLE media (
     episode_count SMALLINT UNSIGNED NULL,
     first_air_date DATE NULL,
     last_air_date DATE NULL,
-    status ENUM('draft', 'pending', 'started', 'watched', 'finished') NOT NULL DEFAULT 'draft',
+    status ENUM('draft', 'started', 'watched') NOT NULL DEFAULT 'draft',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_title (title),
