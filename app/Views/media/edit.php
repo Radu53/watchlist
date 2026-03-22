@@ -5,12 +5,25 @@
 
     <label>
         Title *
-        <input type="text" name="title" required value="<?= htmlspecialchars($item['title']) ?>">
+        <input type="text" name="title" id="title-input" required value="<?= htmlspecialchars($item['title']) ?>">
+    </label>
+
+    <label>
+        Watch URL
+        <div class="watch-url-row">
+            <input type="url" name="watch_url" id="watch-url-input" value="<?= htmlspecialchars($item['watch_url'] ?? '') ?>">
+            <button type="button" id="autofill-btn">Auto-fill from URL</button>
+        </div>
+    </label>
+
+    <label class="checkbox-inline">
+        <input type="checkbox" name="needs_review" value="1" <?= !empty($item['needs_review']) ? 'checked' : '' ?>>
+        Keep in TODO / needs manual review
     </label>
 
     <label>
         Type
-        <select name="type">
+        <select name="type" id="type-input">
             <option value="unknown" <?= $item['type'] === 'unknown' ? 'selected' : '' ?>>Unknown</option>
             <option value="movie" <?= $item['type'] === 'movie' ? 'selected' : '' ?>>Movie</option>
             <option value="tv" <?= $item['type'] === 'tv' ? 'selected' : '' ?>>TV Show</option>
@@ -19,7 +32,7 @@
 
     <label>
         Year
-        <input type="number" name="year" min="1888" max="2100" value="<?= htmlspecialchars((string)($item['year'] ?? '')) ?>">
+        <input type="number" name="year" id="year-input" min="1888" max="2100" value="<?= htmlspecialchars((string)($item['year'] ?? '')) ?>">
     </label>
 
     <div class="genre-field" data-initial-genres='<?= htmlspecialchars(json_encode($item['genre_names'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>'>
@@ -38,22 +51,17 @@
 
     <label>
         Description
-        <textarea name="description" rows="6"><?= htmlspecialchars($item['description'] ?? '') ?></textarea>
+        <textarea name="description" id="description-input" rows="6"><?= htmlspecialchars($item['description'] ?? '') ?></textarea>
     </label>
 
     <label>
         Cover URL
-        <input type="url" name="cover_url" value="<?= htmlspecialchars($item['cover_url'] ?? '') ?>">
+        <input type="url" name="cover_url" id="cover-url-input" value="<?= htmlspecialchars($item['cover_url'] ?? '') ?>">
     </label>
 
     <label>
         IMDb Rating
-        <input type="number" name="imdb_rating" min="0" max="10" step="0.1" value="<?= htmlspecialchars((string)($item['imdb_rating'] ?? '')) ?>">
-    </label>
-
-    <label>
-        Watch URL
-        <input type="url" name="watch_url" value="<?= htmlspecialchars($item['watch_url'] ?? '') ?>">
+        <input type="number" name="imdb_rating" id="imdb-rating-input" min="0" max="10" step="0.1" value="<?= htmlspecialchars((string)($item['imdb_rating'] ?? '')) ?>">
     </label>
 
     <button type="submit">Update</button>
@@ -235,5 +243,73 @@
     } catch (error) {
         console.error('Failed to load initial genres', error);
     }
+
+    const autofillBtn = document.getElementById('autofill-btn');
+    const watchUrlInput = document.getElementById('watch-url-input');
+    const titleInput = document.getElementById('title-input');
+    const typeInput = document.getElementById('type-input');
+    const yearInput = document.getElementById('year-input');
+    const descriptionInput = document.getElementById('description-input');
+    const coverUrlInput = document.getElementById('cover-url-input');
+    const imdbRatingInput = document.getElementById('imdb-rating-input');
+
+    autofillBtn.addEventListener('click', async () => {
+        const watchUrl = watchUrlInput.value.trim();
+        if (!watchUrl) {
+            alert('Paste a watch URL first.');
+            return;
+        }
+
+        autofillBtn.disabled = true;
+
+        try {
+            const response = await fetch('<?= htmlspecialchars(url('/media/parse')) ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
+                body: new URLSearchParams({ watch_url: watchUrl })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                alert(data.message || 'Failed to parse URL.');
+                autofillBtn.disabled = false;
+                return;
+            }
+
+            const parsed = data.parsed || {};
+
+            if (parsed.title && !titleInput.value.trim()) {
+                titleInput.value = parsed.title;
+            }
+
+            if (parsed.type) {
+                typeInput.value = ['movie', 'tv', 'unknown'].includes(parsed.type) ? parsed.type : 'unknown';
+            }
+
+            if (parsed.year && !yearInput.value.trim()) {
+                yearInput.value = parsed.year;
+            }
+
+            if (parsed.description && !descriptionInput.value.trim()) {
+                descriptionInput.value = parsed.description;
+            }
+
+            if (parsed.cover_url && !coverUrlInput.value.trim()) {
+                coverUrlInput.value = parsed.cover_url;
+            }
+
+            if (parsed.imdb_rating && !imdbRatingInput.value.trim()) {
+                imdbRatingInput.value = parsed.imdb_rating;
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Failed to parse URL.');
+        } finally {
+            autofillBtn.disabled = false;
+        }
+    });
 })();
 </script>

@@ -1,14 +1,27 @@
 <h1>Add Media</h1>
 
-<form method="post" action="<?= htmlspecialchars(url('/media/store')) ?>" class="media-form">
+<form method="post" action="<?= htmlspecialchars(url('/media/store')) ?>" class="media-form" id="media-form">
     <label>
         Title *
-        <input type="text" name="title" required>
+        <input type="text" name="title" id="title-input" required>
+    </label>
+
+    <label>
+        Watch URL
+        <div class="watch-url-row">
+            <input type="url" name="watch_url" id="watch-url-input">
+            <button type="button" id="autofill-btn">Auto-fill from URL</button>
+        </div>
+    </label>
+
+    <label class="checkbox-inline">
+        <input type="checkbox" name="needs_review" value="1">
+        Keep in TODO / needs manual review
     </label>
 
     <label>
         Type
-        <select name="type">
+        <select name="type" id="type-input">
             <option value="unknown">Unknown</option>
             <option value="movie">Movie</option>
             <option value="tv">TV Show</option>
@@ -17,7 +30,7 @@
 
     <label>
         Year
-        <input type="number" name="year" min="1888" max="2100">
+        <input type="number" name="year" id="year-input" min="1888" max="2100">
     </label>
 
     <div class="genre-field">
@@ -36,22 +49,17 @@
 
     <label>
         Description
-        <textarea name="description" rows="5"></textarea>
+        <textarea name="description" id="description-input" rows="5"></textarea>
     </label>
 
     <label>
         Cover URL
-        <input type="url" name="cover_url">
+        <input type="url" name="cover_url" id="cover-url-input">
     </label>
 
     <label>
         IMDb Rating
-        <input type="number" name="imdb_rating" min="0" max="10" step="0.1">
-    </label>
-
-    <label>
-        Watch URL
-        <input type="url" name="watch_url">
+        <input type="number" name="imdb_rating" id="imdb-rating-input" min="0" max="10" step="0.1">
     </label>
 
     <button type="submit">Save</button>
@@ -62,7 +70,6 @@
     const input = document.getElementById('genre-search');
     const suggestionsBox = document.getElementById('genre-suggestions');
     const tagsBox = document.getElementById('genre-tags');
-    const form = input.closest('form');
     const selectedGenres = [];
 
     function normalizeGenre(name) {
@@ -222,6 +229,74 @@
     document.addEventListener('click', (event) => {
         if (!event.target.closest('.genre-field')) {
             clearSuggestions();
+        }
+    });
+
+    const autofillBtn = document.getElementById('autofill-btn');
+    const watchUrlInput = document.getElementById('watch-url-input');
+    const titleInput = document.getElementById('title-input');
+    const typeInput = document.getElementById('type-input');
+    const yearInput = document.getElementById('year-input');
+    const descriptionInput = document.getElementById('description-input');
+    const coverUrlInput = document.getElementById('cover-url-input');
+    const imdbRatingInput = document.getElementById('imdb-rating-input');
+
+    autofillBtn.addEventListener('click', async () => {
+        const watchUrl = watchUrlInput.value.trim();
+        if (!watchUrl) {
+            alert('Paste a watch URL first.');
+            return;
+        }
+
+        autofillBtn.disabled = true;
+
+        try {
+            const response = await fetch('<?= htmlspecialchars(url('/media/parse')) ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
+                body: new URLSearchParams({ watch_url: watchUrl })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                alert(data.message || 'Failed to parse URL.');
+                autofillBtn.disabled = false;
+                return;
+            }
+
+            const parsed = data.parsed || {};
+
+            if (parsed.title && !titleInput.value.trim()) {
+                titleInput.value = parsed.title;
+            }
+
+            if (parsed.type) {
+                typeInput.value = ['movie', 'tv', 'unknown'].includes(parsed.type) ? parsed.type : 'unknown';
+            }
+
+            if (parsed.year) {
+                yearInput.value = parsed.year;
+            }
+
+            if (parsed.description && !descriptionInput.value.trim()) {
+                descriptionInput.value = parsed.description;
+            }
+
+            if (parsed.cover_url && !coverUrlInput.value.trim()) {
+                coverUrlInput.value = parsed.cover_url;
+            }
+
+            if (parsed.imdb_rating && !imdbRatingInput.value.trim()) {
+                imdbRatingInput.value = parsed.imdb_rating;
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Failed to parse URL.');
+        } finally {
+            autofillBtn.disabled = false;
         }
     });
 })();

@@ -6,6 +6,7 @@
     <title>Watchlist</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/login.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/edit.css')) ?>">
 </head>
 <body>
     <header class="topbar">

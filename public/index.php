@@ -28,6 +28,7 @@ $router->get('/media/edit', [MediaController::class, 'edit']);
 $router->post('/media/update', [MediaController::class, 'update']);
 $router->post('/media/status', [MediaController::class, 'changeStatus']);
 $router->post('/media/watch', [MediaController::class, 'watch']);
+$router->post('/media/parse', [MediaController::class, 'parse']);
 $router->get('/history', [MediaController::class, 'history']);
 $router->get('/genres/search', [MediaController::class, 'searchGenres']);
 $router->get('/login', [AuthController::class, 'showLogin']);

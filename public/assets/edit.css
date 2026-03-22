@@ -1,0 +1,23 @@
+.watch-url-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.checkbox-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.checkbox-inline input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .watch-url-row {
+        grid-template-columns: 1fr;
+    }
+}
