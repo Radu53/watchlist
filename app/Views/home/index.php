@@ -47,8 +47,44 @@
                 <?php endif; ?>
 
                 <?php if (!empty($item['watch_url'])): ?>
-                    <p><a href="<?= htmlspecialchars($item['watch_url']) ?>" target="_blank">Open watch link</a></p>
+                    <p><a href="<?= htmlspecialchars($item['watch_url']) ?>" target="_blank" rel="noopener noreferrer">Open watch link</a></p>
                 <?php endif; ?>
+
+                <div class="actions">
+                    <a class="btn" href="<?= htmlspecialchars(url('/media/edit?id=' . $item['id'])) ?>">Edit</a>
+
+                    <?php if ($item['type'] === 'movie' && $item['status'] === 'pending'): ?>
+                        <form method="post" action="<?= htmlspecialchars(url('/media/status')) ?>">
+                            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
+                            <input type="hidden" name="status" value="watched">
+                            <button type="submit">Mark Watched</button>
+                        </form>
+                    <?php endif; ?>
+
+                    <?php if ($item['type'] === 'tv' && $item['status'] === 'pending'): ?>
+                        <form method="post" action="<?= htmlspecialchars(url('/media/status')) ?>">
+                            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
+                            <input type="hidden" name="status" value="started">
+                            <button type="submit">Start</button>
+                        </form>
+                    <?php endif; ?>
+
+                    <?php if ($item['type'] === 'tv' && $item['status'] === 'started'): ?>
+                        <form method="post" action="<?= htmlspecialchars(url('/media/status')) ?>">
+                            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
+                            <input type="hidden" name="status" value="finished">
+                            <button type="submit">Finish</button>
+                        </form>
+                    <?php endif; ?>
+
+                    <?php if ($item['type'] === 'tv' && $item['status'] === 'finished'): ?>
+                        <form method="post" action="<?= htmlspecialchars(url('/media/status')) ?>">
+                            <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
+                            <input type="hidden" name="status" value="started">
+                            <button type="submit">Restart</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
             </article>
         <?php endforeach; ?>
     </div>

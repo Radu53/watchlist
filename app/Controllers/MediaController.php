@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Database;
 use App\Core\View;
+use PDO;
 
 class MediaController
 {
@@ -34,13 +35,7 @@ class MediaController
             $status = 'pending';
         }
 
-        $watchDomain = null;
-        if ($watchUrl !== '') {
-            $host = parse_url($watchUrl, PHP_URL_HOST);
-            if ($host) {
-                $watchDomain = preg_replace('/^www\./i', '', strtolower($host));
-            }
-        }
+        $watchDomain = $this->extractDomain($watchUrl);
 
         $stmt = $pdo->prepare("
             INSERT INTO media (
@@ -84,5 +79,207 @@ class MediaController
         View::render('media/todo', [
             'items' => $items,
         ]);
+    }
+
+    public function edit(): void
+    {
+        $pdo = Database::connection();
+
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            http_response_code(400);
+            exit('Invalid media id.');
+        }
+
+        $stmt = $pdo->prepare("SELECT * FROM media WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $item = $stmt->fetch();
+
+        if (!$item) {
+            http_response_code(404);
+            exit('Item not found.');
+        }
+
+        View::render('media/edit', [
+            'item' => $item,
+        ]);
+    }
+
+    public function update(): void
+    {
+        $pdo = Database::connection();
+
+        $id = (int)($_POST['id'] ?? 0);
+        $title = trim($_POST['title'] ?? '');
+        $type = trim($_POST['type'] ?? 'unknown');
+        $year = trim($_POST['year'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        $coverUrl = trim($_POST['cover_url'] ?? '');
+        $imdbRating = trim($_POST['imdb_rating'] ?? '');
+        $watchUrl = trim($_POST['watch_url'] ?? '');
+
+        if ($id <= 0) {
+            http_response_code(400);
+            exit('Invalid media id.');
+        }
+
+        if ($title === '') {
+            http_response_code(422);
+            exit('Title is required.');
+        }
+
+        $stmt = $pdo->prepare("SELECT * FROM media WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $existing = $stmt->fetch();
+
+        if (!$existing) {
+            http_response_code(404);
+            exit('Item not found.');
+        }
+
+        $status = $existing['status'];
+        if ($status === 'draft') {
+            if ($type !== 'unknown' || $year !== '' || $description !== '' || $coverUrl !== '' || $watchUrl !== '') {
+                $status = 'pending';
+            }
+        }
+
+        $watchDomain = $this->extractDomain($watchUrl);
+
+        $stmt = $pdo->prepare("
+            UPDATE media
+            SET
+                type = :type,
+                title = :title,
+                year = :year,
+                description = :description,
+                cover_url = :cover_url,
+                imdb_rating = :imdb_rating,
+                watch_url = :watch_url,
+                watch_domain = :watch_domain,
+                status = :status
+            WHERE id = :id
+        ");
+
+        $stmt->execute([
+            'id' => $id,
+            'type' => in_array($type, ['unknown', 'movie', 'tv'], true) ? $type : 'unknown',
+            'title' => $title,
+            'year' => $year !== '' ? (int)$year : null,
+            'description' => $description !== '' ? $description : null,
+            'cover_url' => $coverUrl !== '' ? $coverUrl : null,
+            'imdb_rating' => $imdbRating !== '' ? $imdbRating : null,
+            'watch_url' => $watchUrl !== '' ? $watchUrl : null,
+            'watch_domain' => $watchDomain,
+            'status' => $status,
+        ]);
+
+        header('Location: ' . url('/'));
+        exit;
+    }
+
+    public function changeStatus(): void
+    {
+        $pdo = Database::connection();
+
+        $id = (int)($_POST['id'] ?? 0);
+        $newStatus = trim($_POST['status'] ?? '');
+
+        if ($id <= 0 || $newStatus === '') {
+            http_response_code(400);
+            exit('Invalid request.');
+        }
+
+        $stmt = $pdo->prepare("SELECT id, type, title, status FROM media WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+        $item = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$item) {
+            http_response_code(404);
+            exit('Item not found.');
+        }
+
+        $oldStatus = $item['status'];
+        $type = $item['type'];
+
+        if (!$this->isValidStatusTransition($type, $oldStatus, $newStatus)) {
+            http_response_code(422);
+            exit('Invalid status transition.');
+        }
+
+        $stmt = $pdo->prepare("UPDATE media SET status = :status WHERE id = :id");
+        $stmt->execute([
+            'status' => $newStatus,
+            'id' => $id,
+        ]);
+
+        $stmt = $pdo->prepare("
+            INSERT INTO watch_history (media_id, old_status, new_status, action_date)
+            VALUES (:media_id, :old_status, :new_status, :action_date)
+        ");
+
+        $stmt->execute([
+            'media_id' => $id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'action_date' => date('Y-m-d'),
+        ]);
+
+        header('Location: ' . url('/'));
+        exit;
+    }
+
+    public function history(): void
+    {
+        $pdo = Database::connection();
+
+        $stmt = $pdo->query("
+            SELECT
+                wh.*,
+                m.title,
+                m.type
+            FROM watch_history wh
+            INNER JOIN media m ON m.id = wh.media_id
+            ORDER BY wh.action_date DESC, wh.id DESC
+        ");
+
+        $items = $stmt->fetchAll();
+
+        View::render('media/history', [
+            'items' => $items,
+        ]);
+    }
+
+    private function extractDomain(string $watchUrl): ?string
+    {
+        if ($watchUrl === '') {
+            return null;
+        }
+
+        $host = parse_url($watchUrl, PHP_URL_HOST);
+        if (!$host) {
+            return null;
+        }
+
+        return preg_replace('/^www\./i', '', strtolower($host));
+    }
+
+    private function isValidStatusTransition(string $type, string $oldStatus, string $newStatus): bool
+    {
+        if ($type === 'movie') {
+            return $oldStatus === 'pending' && $newStatus === 'watched';
+        }
+
+        if ($type === 'tv') {
+            $allowed = [
+                'pending' => ['started'],
+                'started' => ['finished'],
+                'finished' => ['started'],
+            ];
+
+            return in_array($newStatus, $allowed[$oldStatus] ?? [], true);
+        }
+
+        return false;
     }
 }

@@ -9,6 +9,9 @@
                 <h2><?= htmlspecialchars($item['title']) ?></h2>
                 <p>Status: <strong><?= htmlspecialchars($item['status']) ?></strong></p>
                 <p>Created: <?= htmlspecialchars($item['created_at']) ?></p>
+                <p>
+                    <a class="btn" href="<?= htmlspecialchars(url('/media/edit?id=' . $item['id'])) ?>">Complete Entry</a>
+                </p>
             </article>
         <?php endforeach; ?>
     </div>

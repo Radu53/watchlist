@@ -12,6 +12,7 @@
             <a href="<?= htmlspecialchars(url('/')) ?>">Library</a>
             <a href="<?= htmlspecialchars(url('/media/create')) ?>">Add</a>
             <a href="<?= htmlspecialchars(url('/media/todo')) ?>">TODO</a>
+            <a href="<?= htmlspecialchars(url('/history')) ?>">History</a>
         </nav>
     </header>
     <main class="container">
