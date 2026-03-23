@@ -1,0 +1,6 @@
+.poster-overlay:hover > .poster-title-wrap {
+    opacity: 1;
+}
+.poster-title-wrap {
+    opacity: 0;
+}
