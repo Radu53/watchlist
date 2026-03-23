@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/login.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/edit.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/cards.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/poster.css')) ?>">
 </head>
 <body>
     <header class="topbar">
