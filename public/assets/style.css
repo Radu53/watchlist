@@ -129,7 +129,8 @@ button,
 }
 
 .pagination {
-    display: flex;
+    display: grid;
+    grid-template-areas: "prev pages next";
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
@@ -138,9 +139,16 @@ button,
 }
 
 .pagination-pages {
+    grid-area: pages;
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+}
+.pagination-prev {
+    grid-area: prev;
+}
+.pagination-next {
+    grid-area: next;
 }
 
 .pagination-page {

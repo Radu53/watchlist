@@ -40,7 +40,7 @@
     <?php if ($totalPages > 1): ?>
         <div class="pagination">
             <?php if ($page > 1): ?>
-                <a class="btn" href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $page - 1])))) ?>">Previous</a>
+                <a class="btn pagination-prev" href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $page - 1])))) ?>">Previous</a>
             <?php endif; ?>
 
             <div class="pagination-pages">
@@ -54,7 +54,7 @@
             </div>
 
             <?php if ($page < $totalPages): ?>
-                <a class="btn" href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $page + 1])))) ?>">Next</a>
+                <a class="btn pagination-next" href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $page + 1])))) ?>">Next</a>
             <?php endif; ?>
         </div>
     <?php endif; ?>
