@@ -23,6 +23,7 @@ use App\Controllers\AdminController;
 $router = new Router($config['app']['base_url'] ?? '');
 
 $router->get('/', [HomeController::class, 'index']);
+$router->get('/suggestions', [HomeController::class, 'suggestions']);
 $router->get('/categories', [HomeController::class, 'categories']);
 $router->get('/media/create', [AdminController::class, 'mediaCreate']);
 $router->post('/media/store', [MediaController::class, 'store']);

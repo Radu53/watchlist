@@ -31,28 +31,7 @@
 </form>
 
 <?php if (!empty($suggestions)): ?>
-    <section class="suggestions-block">
-        <div class="suggestions-header">
-            <h2>Suggestions</h2>
-            <a class="btn" href="<?= htmlspecialchars(url('/?refresh=1')) ?>">Refresh</a>
-        </div>
-        <div class="poster-grid">
-            <?php foreach ($suggestions as $suggestion): ?>
-                <?php $coverUrl = trim((string)($suggestion['cover_url'] ?? '')); ?>
-                <article class="poster-card">
-                    <?php if ($coverUrl !== ''): ?>
-                        <img src="<?= htmlspecialchars($coverUrl) ?>" alt="<?= htmlspecialchars($suggestion['title'] ?? '') ?>" class="poster-image">
-                    <?php else: ?>
-                        <div class="poster-fallback">No Cover</div>
-                    <?php endif; ?>
-                    <div class="poster-title-wrap">
-                        <h3 class="poster-title"><?= htmlspecialchars($suggestion['title'] ?? '') ?></h3>
-                        <p class="poster-rating">Avg rating: <?= number_format((float)($suggestion['avg_rating'] ?? 0), 1) ?>/5</p>
-                    </div>
-                </article>
-            <?php endforeach; ?>
-        </div>
-    </section>
+    <?php require __DIR__ . '/_suggestions.php'; ?>
 <?php endif; ?>
 
 <?php if (empty($items)): ?>
@@ -146,6 +125,38 @@
 
 <script>
 document.addEventListener('click', async function (event) {
+    const refreshBtn = event.target.closest('.suggestions-refresh-btn');
+    if (refreshBtn) {
+        event.preventDefault();
+
+        const block = refreshBtn.closest('.suggestions-block');
+        if (!block) return;
+
+        const targetUrl = new URL(refreshBtn.dataset.refreshUrl || '<?= htmlspecialchars(url('/suggestions')) ?>', window.location.href);
+        targetUrl.search = window.location.search;
+        targetUrl.searchParams.set('refresh', '1');
+
+        try {
+            const response = await fetch(targetUrl.toString(), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to refresh suggestions');
+            }
+
+            const html = await response.text();
+            block.outerHTML = html;
+        } catch (error) {
+            console.error(error);
+            alert('Suggestions refresh failed.');
+        }
+
+        return;
+    }
+
     const btn = event.target.closest('.watch-action-btn');
     if (!btn) return;
 
