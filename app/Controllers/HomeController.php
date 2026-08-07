@@ -146,7 +146,7 @@ class HomeController
                   AND m.watch_url IS NOT NULL
                   AND m.watch_url != ''
                   AND m.needs_review = 0
-                ORDER BY m.created_at DESC
+                ORDER BY RAND()
                 LIMIT 3
             ");
             $sampleStmt->execute(['genre_id' => $genreId]);
