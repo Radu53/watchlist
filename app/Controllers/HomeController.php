@@ -19,6 +19,8 @@ class HomeController
         $type = $filters['type'];
         $status = $filters['status'];
         $genre = $filters['genre'];
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $perPage = 24;
 
         $sql = "
             SELECT m.*, ums.status AS user_status, avg_ratings.avg_rating, user_ratings.rating AS user_rating
@@ -69,6 +71,14 @@ class HomeController
 
         $sql .= " GROUP BY m.id ORDER BY m.created_at DESC";
 
+        $countSql = "SELECT COUNT(*) FROM (" . $sql . ") AS counted";
+        $countStmt = $pdo->prepare($countSql);
+        $countStmt->execute($params);
+        $totalItems = (int)$countStmt->fetchColumn();
+
+        $offset = ($page - 1) * $perPage;
+        $sql .= " LIMIT " . $perPage . " OFFSET " . $offset;
+
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -86,11 +96,17 @@ class HomeController
         $allGenres = $pdo->query("SELECT name FROM genres ORDER BY name ASC")->fetchAll(PDO::FETCH_COLUMN);
         $suggestions = $this->getSuggestions($pdo, $userId, $filters);
 
+        $totalPages = max(1, (int)ceil($totalItems / $perPage));
+
         View::render('home/index', [
             'items' => $items,
             'filters' => $filters,
             'allGenres' => $allGenres,
             'suggestions' => $suggestions,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalItems' => $totalItems,
+            'totalPages' => $totalPages,
         ]);
     }
 

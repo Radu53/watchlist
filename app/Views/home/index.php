@@ -37,6 +37,28 @@
 <?php if (empty($items)): ?>
     <p>No items found.</p>
 <?php else: ?>
+    <?php if ($totalPages > 1): ?>
+        <div class="pagination">
+            <?php if ($page > 1): ?>
+                <a class="btn" href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $page - 1])))) ?>">Previous</a>
+            <?php endif; ?>
+
+            <div class="pagination-pages">
+                <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                    <?php $isCurrent = $i === $page; ?>
+                    <a class="pagination-page <?= $isCurrent ? 'active' : '' ?>"
+                       href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $i])))) ?>">
+                        <?= (int)$i ?>
+                    </a>
+                <?php endfor; ?>
+            </div>
+
+            <?php if ($page < $totalPages): ?>
+                <a class="btn" href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $page + 1])))) ?>">Next</a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
     <div class="poster-grid">
         <?php foreach ($items as $item): ?>
             <?php
