@@ -143,6 +143,28 @@
             </article>
         <?php endforeach; ?>
     </div>
+    
+    <?php if ($totalPages > 1): ?>
+        <div class="pagination">
+            <?php if ($page > 1): ?>
+                <a class="btn pagination-prev" href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $page - 1])))) ?>">Previous</a>
+            <?php endif; ?>
+
+            <div class="pagination-pages">
+                <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                    <?php $isCurrent = $i === $page; ?>
+                    <a class="pagination-page <?= $isCurrent ? 'active' : '' ?>"
+                       href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $i])))) ?>">
+                        <?= (int)$i ?>
+                    </a>
+                <?php endfor; ?>
+            </div>
+
+            <?php if ($page < $totalPages): ?>
+                <a class="btn pagination-next" href="<?= htmlspecialchars(url('/?' . http_build_query(array_merge($filters, ['page' => $page + 1])))) ?>">Next</a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
 <?php endif; ?>
 
 <script>
