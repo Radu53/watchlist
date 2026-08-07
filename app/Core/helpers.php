@@ -28,15 +28,36 @@ function is_logged_in(): bool
     return !empty($_SESSION['user_id']);
 }
 
+function current_user_id(): ?int
+{
+    $userId = $_SESSION['user_id'] ?? null;
+    return $userId !== null ? (int)$userId : null;
+}
+
 function current_username(): ?string
 {
     return $_SESSION['username'] ?? null;
+}
+
+function is_admin(): bool
+{
+    return ($_SESSION['role'] ?? '') === 'admin';
 }
 
 function require_login(): void
 {
     if (!is_logged_in()) {
         header('Location: ' . url('/login'));
+        exit;
+    }
+}
+
+function require_admin(): void
+{
+    require_login();
+
+    if (!is_admin()) {
+        header('Location: ' . url('/'));
         exit;
     }
 }

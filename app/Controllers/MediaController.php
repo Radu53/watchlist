@@ -36,6 +36,30 @@ class MediaController
             exit('Title is required.');
         }
 
+        if (isset($_POST['duplicate_action']) && $_POST['duplicate_action'] === 'cancel') {
+            header('Location: ' . url('/'));
+            exit;
+        }
+
+        $duplicateCandidates = $this->findDuplicateMedia($pdo, $title, $watchUrl);
+        if (!empty($duplicateCandidates) && !isset($_POST['duplicate_action'])) {
+            View::render('media/duplicate', [
+                'pendingData' => [
+                    'title' => $title,
+                    'watch_url' => $watchUrl,
+                    'type' => $type,
+                    'year' => $year,
+                    'description' => $description,
+                    'cover_url' => $coverUrl,
+                    'imdb_rating' => $imdbRating,
+                    'genres' => $genreNames,
+                    'needs_review' => $needsReview,
+                ],
+                'duplicateCandidates' => $duplicateCandidates,
+            ]);
+            return;
+        }
+
         if ($watchUrl === '') {
             $needsReview = 1;
         }
@@ -206,6 +230,26 @@ class MediaController
         exit;
     }
 
+    public function delete(): void
+    {
+        $pdo = Database::connection();
+        $id = (int)($_POST['id'] ?? 0);
+
+        if ($id <= 0) {
+            http_response_code(400);
+            exit('Invalid media id.');
+        }
+
+        $pdo->prepare("DELETE FROM user_media_status WHERE media_id = :id")->execute(['id' => $id]);
+        $pdo->prepare("DELETE FROM user_media_ratings WHERE media_id = :id")->execute(['id' => $id]);
+        $pdo->prepare("DELETE FROM media_genres WHERE media_id = :id")->execute(['id' => $id]);
+        $pdo->prepare("DELETE FROM watch_history WHERE media_id = :id")->execute(['id' => $id]);
+        $pdo->prepare("DELETE FROM media WHERE id = :id")->execute(['id' => $id]);
+
+        header('Location: ' . url('/'));
+        exit;
+    }
+
     public function changeStatus(): void
     {
         $pdo = Database::connection();
@@ -218,7 +262,7 @@ class MediaController
             exit('Invalid request.');
         }
 
-        $stmt = $pdo->prepare("SELECT id, type, title, status, watch_url FROM media WHERE id = :id");
+        $stmt = $pdo->prepare("SELECT id, type, title, watch_url FROM media WHERE id = :id");
         $stmt->execute(['id' => $id]);
         $item = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -232,18 +276,25 @@ class MediaController
             exit('Cannot change status without a watch URL.');
         }
 
-        $oldStatus = $item['status'] ?? null;
-        $type = $item['type'];
-
-        if (!$this->isValidStatusTransition($type, $oldStatus, $newStatus)) {
-            http_response_code(422);
-            exit('Invalid status transition.');
+        $userId = current_user_id();
+        if ($userId === null) {
+            http_response_code(401);
+            exit('You must be logged in.');
         }
 
-        $stmt = $pdo->prepare("UPDATE media SET status = :status WHERE id = :id");
+        if ($newStatus === 'none') {
+            $newStatus = null;
+        }
+
+        if ($newStatus !== null && !in_array($newStatus, ['started', 'watched'], true)) {
+            $newStatus = null;
+        }
+
+        $stmt = $pdo->prepare("REPLACE INTO user_media_status (user_id, media_id, status) VALUES (:user_id, :media_id, :status)");
         $stmt->execute([
+            'user_id' => $userId,
+            'media_id' => $id,
             'status' => $newStatus,
-            'id' => $id,
         ]);
 
         $stmt = $pdo->prepare("
@@ -253,8 +304,8 @@ class MediaController
 
         $stmt->execute([
             'media_id' => $id,
-            'old_status' => $oldStatus,
-            'new_status' => $newStatus,
+            'old_status' => null,
+            'new_status' => $newStatus ?? 'none',
             'action_date' => date('Y-m-d'),
         ]);
 
@@ -271,7 +322,7 @@ class MediaController
             $this->json(['ok' => false, 'message' => 'Invalid id.'], 400);
         }
 
-        $stmt = $pdo->prepare("SELECT id, type, status, watch_url FROM media WHERE id = :id");
+        $stmt = $pdo->prepare("SELECT id, type, watch_url FROM media WHERE id = :id");
         $stmt->execute(['id' => $id]);
         $item = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -283,7 +334,14 @@ class MediaController
             $this->json(['ok' => false, 'message' => 'Missing watch URL.'], 422);
         }
 
-        $oldStatus = $item['status'] ?? null;
+        $userId = current_user_id();
+        if ($userId === null) {
+            $this->json(['ok' => false, 'message' => 'You must be logged in.'], 401);
+        }
+
+        $stmt = $pdo->prepare("SELECT status FROM user_media_status WHERE user_id = :user_id AND media_id = :media_id LIMIT 1");
+        $stmt->execute(['user_id' => $userId, 'media_id' => $id]);
+        $oldStatus = $stmt->fetchColumn();
         $newStatus = $oldStatus;
 
         if ($item['type'] === 'movie') {
@@ -297,22 +355,11 @@ class MediaController
         }
 
         if ($newStatus !== $oldStatus) {
-            $stmt = $pdo->prepare("UPDATE media SET status = :status WHERE id = :id");
+            $stmt = $pdo->prepare("REPLACE INTO user_media_status (user_id, media_id, status) VALUES (:user_id, :media_id, :status)");
             $stmt->execute([
-                'status' => $newStatus,
-                'id' => $id,
-            ]);
-
-            $stmt = $pdo->prepare("
-                INSERT INTO watch_history (media_id, old_status, new_status, action_date)
-                VALUES (:media_id, :old_status, :new_status, :action_date)
-            ");
-
-            $stmt->execute([
+                'user_id' => $userId,
                 'media_id' => $id,
-                'old_status' => $oldStatus,
-                'new_status' => $newStatus,
-                'action_date' => date('Y-m-d'),
+                'status' => $newStatus,
             ]);
         }
 
@@ -321,6 +368,37 @@ class MediaController
             'watch_url' => $item['watch_url'],
             'status' => $newStatus,
         ]);
+    }
+
+    public function rate(): void
+    {
+        $pdo = Database::connection();
+        $userId = current_user_id();
+        $id = (int)($_POST['id'] ?? 0);
+        $rating = (int)($_POST['rating'] ?? 0);
+
+        if ($userId === null) {
+            $this->json(['ok' => false, 'message' => 'You must be logged in.'], 401);
+        }
+
+        if ($id <= 0 || $rating < 1 || $rating > 5) {
+            $this->json(['ok' => false, 'message' => 'Invalid rating.'], 422);
+        }
+
+        $stmt = $pdo->prepare("SELECT id FROM media WHERE id = :id LIMIT 1");
+        $stmt->execute(['id' => $id]);
+        if (!$stmt->fetch()) {
+            $this->json(['ok' => false, 'message' => 'Item not found.'], 404);
+        }
+
+        $stmt = $pdo->prepare("REPLACE INTO user_media_ratings (user_id, media_id, rating) VALUES (:user_id, :media_id, :rating)");
+        $stmt->execute([
+            'user_id' => $userId,
+            'media_id' => $id,
+            'rating' => $rating,
+        ]);
+
+        $this->json(['ok' => true, 'rating' => $rating]);
     }
 
     public function searchGenres(): void
@@ -451,11 +529,18 @@ class MediaController
             $parsed['year'] = $this->normalizeYear($parsed['year']);
         }
 
+        $duplicate = $this->findDuplicateMedia($pdo, $parsed['title'] ?? '', $url);
+
         $this->json([
             'ok' => true,
             'domain' => $domain,
             'parsed' => $parsed,
             'recognized_site' => $site ? true : false,
+            'duplicate' => $duplicate ? [
+                'found' => true,
+                'message' => 'This URL already exists in the library.',
+                'item' => $duplicate[0],
+            ] : null,
         ]);
     }
 
@@ -494,21 +579,30 @@ class MediaController
         return preg_replace('/^www\./i', '', strtolower($host));
     }
 
-    private function isValidStatusTransition(string $type, ?string $oldStatus, string $newStatus): bool
+    private function findDuplicateMedia(PDO $pdo, string $title, string $watchUrl): array
     {
-        if ($newStatus !== 'watched') {
-            return false;
+        $conditions = [];
+        $params = [];
+
+        if ($title !== '') {
+            $normalizedTitle = strtolower(preg_replace('/\s+/', '', $title) ?? $title);
+            $conditions[] = 'LOWER(REPLACE(title, " ", "")) = :title';
+            $params['title'] = $normalizedTitle;
         }
 
-        if ($type === 'movie') {
-            return in_array($oldStatus, [null, '', 'watched'], true);
+        if ($watchUrl !== '') {
+            $conditions[] = 'LOWER(watch_url) = :watch_url';
+            $params['watch_url'] = strtolower(trim($watchUrl));
         }
 
-        if ($type === 'tv') {
-            return in_array($oldStatus, [null, '', 'started', 'watched'], true);
+        if ($conditions === []) {
+            return [];
         }
 
-        return false;
+        $stmt = $pdo->prepare("SELECT id, title, watch_url, cover_url, year FROM media WHERE " . implode(' OR ', $conditions) . " LIMIT 5");
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     private function syncGenres(PDO $pdo, int $mediaId, array $genreNames): void

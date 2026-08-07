@@ -35,7 +35,7 @@ class AuthController
         }
 
         $stmt = $pdo->prepare("
-            SELECT id, username, password_hash
+            SELECT id, username, password_hash, role
             FROM users
             WHERE username = :username
             LIMIT 1
@@ -55,6 +55,7 @@ class AuthController
 
         $_SESSION['user_id'] = (int)$user['id'];
         $_SESSION['username'] = $user['username'];
+        $_SESSION['role'] = $user['role'] ?? 'user';
 
         header('Location: ' . url('/'));
         exit;

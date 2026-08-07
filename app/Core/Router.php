@@ -49,6 +49,26 @@ class Router
             exit;
         }
 
+        $adminOnlyPaths = [
+            '/admin',
+            '/admin/',
+            '/admin/media/create',
+            '/admin/media/todo',
+            '/admin/media/edit',
+            '/admin/parser-rules',
+            '/media/create',
+            '/media/todo',
+            '/media/edit',
+            '/media/delete',
+        ];
+
+        if (str_starts_with($path, '/admin') || in_array($path, $adminOnlyPaths, true)) {
+            if (!\is_admin()) {
+                header('Location: ' . \url('/'));
+                exit;
+            }
+        }
+
         $handler = $this->routes[$method][$path] ?? null;
 
         if (!$handler) {

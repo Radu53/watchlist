@@ -11,6 +11,7 @@ class HomeController
     public function index(): void
     {
         $pdo = Database::connection();
+        $userId = current_user_id();
 
         $search = trim($_GET['search'] ?? '');
         $year = trim($_GET['year'] ?? '');
@@ -19,15 +20,22 @@ class HomeController
         $genre = trim($_GET['genre'] ?? '');
 
         $sql = "
-            SELECT DISTINCT m.*
+            SELECT m.*, ums.status AS user_status, avg_ratings.avg_rating, user_ratings.rating AS user_rating
             FROM media m
             LEFT JOIN media_genres mg ON mg.media_id = m.id
             LEFT JOIN genres g ON g.id = mg.genre_id
+            LEFT JOIN user_media_status ums ON ums.media_id = m.id AND ums.user_id = :user_id
+            LEFT JOIN (
+                SELECT media_id, AVG(rating) AS avg_rating
+                FROM user_media_ratings
+                GROUP BY media_id
+            ) avg_ratings ON avg_ratings.media_id = m.id
+            LEFT JOIN user_media_ratings user_ratings ON user_ratings.media_id = m.id AND user_ratings.user_id = :user_id
             WHERE m.watch_url IS NOT NULL
               AND m.watch_url != ''
               AND m.needs_review = 0
         ";
-        $params = [];
+        $params = ['user_id' => $userId];
 
         if ($search !== '') {
             $sql .= " AND m.title LIKE :search";
@@ -46,9 +54,9 @@ class HomeController
 
         if ($status !== '') {
             if ($status === 'none') {
-                $sql .= " AND (m.status IS NULL OR m.status = '')";
+                $sql .= " AND (ums.status IS NULL OR ums.status = '')";
             } else {
-                $sql .= " AND m.status = :status";
+                $sql .= " AND ums.status = :status";
                 $params['status'] = $status;
             }
         }
@@ -58,7 +66,7 @@ class HomeController
             $params['genre'] = $genre;
         }
 
-        $sql .= " ORDER BY m.created_at DESC";
+        $sql .= " GROUP BY m.id ORDER BY m.created_at DESC";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -75,12 +83,66 @@ class HomeController
         }
 
         $allGenres = $pdo->query("SELECT name FROM genres ORDER BY name ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $suggestions = $this->getSuggestions($pdo, $userId);
 
         View::render('home/index', [
             'items' => $items,
             'filters' => compact('search', 'year', 'type', 'status', 'genre'),
             'allGenres' => $allGenres,
+            'suggestions' => $suggestions,
         ]);
+    }
+
+    public function categories(): void
+    {
+        $pdo = Database::connection();
+
+        $stmt = $pdo->query("
+            SELECT g.name, COUNT(mg.media_id) AS item_count
+            FROM genres g
+            LEFT JOIN media_genres mg ON mg.genre_id = g.id
+            GROUP BY g.id
+            ORDER BY g.name ASC
+        ");
+
+        View::render('home/categories', [
+            'genres' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+        ]);
+    }
+
+    private function getSuggestions(PDO $pdo, ?int $userId): array
+    {
+        $refresh = isset($_GET['refresh']) ? 1 : 0;
+        $sql = "
+            SELECT m.id, m.title, m.cover_url, m.watch_url, m.type, m.year,
+                   COALESCE(avg_ratings.avg_rating, 0) AS avg_rating,
+                   ums.status AS user_status
+            FROM media m
+            LEFT JOIN user_media_status ums ON ums.media_id = m.id AND ums.user_id = :user_id
+            LEFT JOIN (
+                SELECT media_id, AVG(rating) AS avg_rating
+                FROM user_media_ratings
+                GROUP BY media_id
+            ) avg_ratings ON avg_ratings.media_id = m.id
+            WHERE m.watch_url IS NOT NULL
+              AND m.watch_url != ''
+              AND m.needs_review = 0
+              AND (ums.status IS NULL OR ums.status != 'watched')
+        ";
+
+        $params = ['user_id' => $userId];
+
+        if ($refresh) {
+            $sql .= " ORDER BY RAND()";
+        } else {
+            $sql .= " ORDER BY COALESCE(avg_ratings.avg_rating, 0) DESC, m.created_at DESC";
+        }
+
+        $sql .= " LIMIT 6";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     private function getGenresForMediaIds(PDO $pdo, array $mediaIds): array

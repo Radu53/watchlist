@@ -67,6 +67,11 @@
     <button type="submit">Update</button>
 </form>
 
+<form method="post" action="<?= htmlspecialchars(url('/media/delete')) ?>" class="media-form" onsubmit="return confirm('Delete this entry?');">
+    <input type="hidden" name="id" value="<?= (int)$item['id'] ?>">
+    <button type="submit">Delete</button>
+</form>
+
 <script>
 (function () {
     const field = document.querySelector('.genre-field');

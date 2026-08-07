@@ -14,9 +14,13 @@
         <nav>
             <?php if (is_logged_in()): ?>
                 <a href="<?= htmlspecialchars(url('/')) ?>">Library</a>
-                <a href="<?= htmlspecialchars(url('/media/create')) ?>">Add</a>
-                <a href="<?= htmlspecialchars(url('/media/todo')) ?>">TODO</a>
+                <a href="<?= htmlspecialchars(url('/categories')) ?>">Categories</a>
                 <a href="<?= htmlspecialchars(url('/history')) ?>">History</a>
+
+                <?php if (is_admin()): ?>
+                    <a href="<?= htmlspecialchars(url('/admin')) ?>">Admin</a>
+                    <a href="<?= htmlspecialchars(url('/admin/parser-rules')) ?>">Parser Rules</a>
+                <?php endif; ?>
 
                 <span class="nav-user">
                     <?= htmlspecialchars(current_username() ?? '') ?>

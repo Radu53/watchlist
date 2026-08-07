@@ -267,6 +267,10 @@
                 return;
             }
 
+            if (data.duplicate && data.duplicate.found) {
+                alert(data.duplicate.message);
+            }
+
             const parsed = data.parsed || {};
 
             if (parsed.title && !titleInput.value.trim()) {
